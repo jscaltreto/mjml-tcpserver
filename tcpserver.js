@@ -1,6 +1,9 @@
 'use strict';
 
 var mjml = require('mjml'),
+    _ = require('lodash'),
+    minify = require('html-minifier'),
+    beautify = require('js-beautify'),
     mjml_maj_ver = parseInt(require('mjml/package.json').version.split('.')[0]),
     net = require('net'),
     fs = require('fs'),
@@ -10,8 +13,25 @@ var mjml = require('mjml'),
         host: '127.0.0.1',
         port: '28101',
         touchstop: null,
-        mjml: {}
+        mjml: {},
+        beautify: false,
+        minify: false,
     };
+
+const beautifyConfig = {
+  indent_size: 2,
+  wrap_attributes_indent_size: 2,
+  max_preserve_newline: 0,
+  preserve_newlines: false,
+  end_with_newline: true,
+};
+
+const minifyConfig = {
+  collapseWhitespace: true,
+  minifyCSS: false,
+  caseSensitive: true,
+  removeEmptyAttributes: true,
+};
 
 function terminate(exit_code) {
     if (server && server.listening) {
@@ -76,6 +96,12 @@ for (var i = 0; i < argv.length; i++) {
     }
 }
 
+if (mjml_maj_ver >= 4) {
+    conf.beautify = conf.mjml.beautify && conf.mjml.beautify !== 'false';
+    conf.minify = conf.mjml.minify && conf.mjml.minify !== 'false';
+    conf.mjml = _.omit(conf.mjml, ['minify', 'beautify']);
+}
+
 function handleConnection(conn) {
     var total_data = '',
         header_size = 9,
@@ -96,6 +122,15 @@ function handleConnection(conn) {
                 total_data = total_data.slice(header_size).toString();
                 if (mjml_maj_ver >= 4) {
                     result = mjml(total_data, conf.mjml);
+                    if (conf.beautify) {
+                        result.html = beautify.html(result.html, beautifyConfig);
+                    }
+                    if (conf.minify) {
+                        result.html = minify.minify(result.html, {
+                            ...minifyConfig,
+                            ...conf.mjml.minifyOptions,
+                        });
+                    }
                 } else {
                     result = mjml.mjml2html(total_data, conf.mjml);
                 }
